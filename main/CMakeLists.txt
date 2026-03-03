@@ -3,7 +3,7 @@ idf_component_register(
         "mimi.c"
         "bus/message_bus.c"
         "wifi/wifi_manager.c"
-        "telegram/telegram_bot.c"
+        "wecom/wecom_bot.c"
         "llm/llm_proxy.c"
         "agent/agent_loop.c"
         "agent/context_builder.c"

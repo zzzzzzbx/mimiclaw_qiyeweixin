@@ -6,14 +6,34 @@
 #include <stdlib.h>
 #include <dirent.h>
 #include <time.h>
+#include <unistd.h>
 #include "esp_log.h"
 #include "cJSON.h"
 
 static const char *TAG = "session";
 
-static void session_path(const char *chat_id, char *buf, size_t size)
+static void session_path_new(const char *chat_id, char *buf, size_t size)
+{
+    snprintf(buf, size, "%s/chat_%s.jsonl", MIMI_SPIFFS_SESSION_DIR, chat_id);
+}
+
+static void session_path_legacy(const char *chat_id, char *buf, size_t size)
 {
     snprintf(buf, size, "%s/tg_%s.jsonl", MIMI_SPIFFS_SESSION_DIR, chat_id);
+}
+
+static void session_path_for_read(const char *chat_id, char *buf, size_t size)
+{
+    char legacy[80];
+    session_path_new(chat_id, buf, size);
+    if (access(buf, F_OK) == 0) {
+        return;
+    }
+    session_path_legacy(chat_id, legacy, sizeof(legacy));
+    if (access(legacy, F_OK) == 0) {
+        strncpy(buf, legacy, size - 1);
+        buf[size - 1] = '\0';
+    }
 }
 
 esp_err_t session_mgr_init(void)
@@ -25,7 +45,7 @@ esp_err_t session_mgr_init(void)
 esp_err_t session_append(const char *chat_id, const char *role, const char *content)
 {
     char path[64];
-    session_path(chat_id, path, sizeof(path));
+    session_path_new(chat_id, path, sizeof(path));
 
     FILE *f = fopen(path, "a");
     if (!f) {
@@ -53,7 +73,7 @@ esp_err_t session_append(const char *chat_id, const char *role, const char *cont
 esp_err_t session_get_history_json(const char *chat_id, char *buf, size_t size, int max_msgs)
 {
     char path[64];
-    session_path(chat_id, path, sizeof(path));
+    session_path_for_read(chat_id, path, sizeof(path));
 
     FILE *f = fopen(path, "r");
     if (!f) {
@@ -128,9 +148,19 @@ esp_err_t session_get_history_json(const char *chat_id, char *buf, size_t size, 
 esp_err_t session_clear(const char *chat_id)
 {
     char path[64];
-    session_path(chat_id, path, sizeof(path));
+    session_path_new(chat_id, path, sizeof(path));
+    char legacy[80];
+    session_path_legacy(chat_id, legacy, sizeof(legacy));
 
+    int removed = 0;
     if (remove(path) == 0) {
+        removed++;
+    }
+    if (remove(legacy) == 0) {
+        removed++;
+    }
+
+    if (removed > 0) {
         ESP_LOGI(TAG, "Session %s cleared", chat_id);
         return ESP_OK;
     }
@@ -152,7 +182,8 @@ void session_list(void)
     struct dirent *entry;
     int count = 0;
     while ((entry = readdir(dir)) != NULL) {
-        if (strstr(entry->d_name, "tg_") && strstr(entry->d_name, ".jsonl")) {
+        if ((strstr(entry->d_name, "chat_") || strstr(entry->d_name, "tg_")) &&
+            strstr(entry->d_name, ".jsonl")) {
             ESP_LOGI(TAG, "  Session: %s", entry->d_name);
             count++;
         }

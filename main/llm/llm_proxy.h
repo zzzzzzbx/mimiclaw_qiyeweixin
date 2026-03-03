@@ -23,6 +23,12 @@ esp_err_t llm_set_api_key(const char *api_key);
 esp_err_t llm_set_provider(const char *provider);
 
 /**
+ * Save custom LLM API URL to NVS.
+ * Useful for OpenAI-compatible domestic providers.
+ */
+esp_err_t llm_set_api_url(const char *api_url);
+
+/**
  * Save the model identifier to NVS.
  */
 esp_err_t llm_set_model(const char *model);

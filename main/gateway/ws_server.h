@@ -9,6 +9,9 @@
  * Protocol:
  *   Inbound:  {"type":"message","content":"hello","chat_id":"ws_client1"}
  *   Outbound: {"type":"response","content":"Hi!","chat_id":"ws_client1"}
+ * Extra HTTP routes:
+ *   GET /api/status  -> runtime status JSON
+ *   GET /ui          -> built-in browser UI
  */
 esp_err_t ws_server_start(void);
 

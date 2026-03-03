@@ -17,12 +17,12 @@
 
 **$5 芯片上的 AI 助理（OpenClaw）。没有 Linux，没有 Node.js，纯 C。**
 
-MimiClaw 把一块小小的 ESP32-S3 开发板变成你的私人 AI 助理。插上 USB 供电，连上 WiFi，通过 Telegram 跟它对话 — 它能处理你丢给它的任何任务，还会随时间积累本地记忆不断进化 — 全部跑在一颗拇指大小的芯片上。
+MimiClaw 把一块小小的 ESP32-S3 开发板变成你的私人 AI 助理。插上 USB 供电，连上 WiFi，通过企业微信机器人或浏览器跟它对话 — 它能处理你丢给它的任何任务，还会随时间积累本地记忆不断进化 — 全部跑在一颗拇指大小的芯片上。
 
 ## 认识 MimiClaw
 
 - **小巧** — 没有 Linux，没有 Node.js，没有臃肿依赖 — 纯 C
-- **好用** — 在 Telegram 发消息，剩下的它来搞定
+- **好用** — 在企业微信或浏览器发消息，剩下的它来搞定
 - **忠诚** — 从记忆中学习，跨重启也不会忘
 - **能干** — USB 供电，0.5W，24/7 运行
 - **可爱** — 一块 ESP32-S3 开发板，$5，没了
@@ -31,7 +31,7 @@ MimiClaw 把一块小小的 ESP32-S3 开发板变成你的私人 AI 助理。插
 
 ![](assets/mimiclaw.png)
 
-你在 Telegram 发一条消息，ESP32-S3 通过 WiFi 收到后送进 Agent 循环 — LLM 思考、调用工具、读取记忆 — 再把回复发回来。同时支持 **Anthropic (Claude)** 和 **OpenAI (GPT)** 两种提供商，运行时可切换。一切都跑在一颗 $5 的芯片上，所有数据存在本地 Flash。
+你在企业微信或浏览器发一条消息，ESP32-S3 通过 WiFi 收到后送进 Agent 循环 — LLM 思考、调用工具、读取记忆 — 再把回复发回来。同时支持 **Anthropic (Claude)** 和 **OpenAI 兼容接口** 两种协议，运行时可切换。一切都跑在一颗 $5 的芯片上，所有数据存在本地 Flash。
 
 ## 快速开始
 
@@ -39,7 +39,7 @@ MimiClaw 把一块小小的 ESP32-S3 开发板变成你的私人 AI 助理。插
 
 - 一块 **ESP32-S3 开发板**，16MB Flash + 8MB PSRAM（如小智 AI 开发板，~¥30）
 - 一根 **USB Type-C 数据线**
-- 一个 **Telegram Bot Token** — 在 Telegram 找 [@BotFather](https://t.me/BotFather) 创建
+- 一个 **企业微信群机器人 Webhook URL**
 - 一个 **Anthropic API Key** — 从 [console.anthropic.com](https://console.anthropic.com) 获取，或一个 **OpenAI API Key** — 从 [platform.openai.com](https://platform.openai.com) 获取
 
 ### 安装
@@ -126,9 +126,10 @@ cp main/mimi_secrets.h.example main/mimi_secrets.h
 ```c
 #define MIMI_SECRET_WIFI_SSID       "你的WiFi名"
 #define MIMI_SECRET_WIFI_PASS       "你的WiFi密码"
-#define MIMI_SECRET_TG_TOKEN        "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+#define MIMI_SECRET_WECOM_WEBHOOK   "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxxx"
 #define MIMI_SECRET_API_KEY         "sk-ant-api03-xxxxx"
-#define MIMI_SECRET_MODEL_PROVIDER  "anthropic"     // "anthropic" 或 "openai"
+#define MIMI_SECRET_LLM_API_URL     "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+#define MIMI_SECRET_MODEL_PROVIDER  "openai_compatible"     // "anthropic" 或 "openai_compatible"
 #define MIMI_SECRET_SEARCH_KEY      ""              // 可选：Brave Search API key
 #define MIMI_SECRET_PROXY_HOST      "10.0.0.1"      // 可选：代理地址
 #define MIMI_SECRET_PROXY_PORT      "7897"           // 可选：代理端口
@@ -181,9 +182,10 @@ mimi> clear_proxy                    # 清除代理
 
 ```
 mimi> wifi_set MySSID MyPassword   # 换 WiFi
-mimi> set_tg_token 123456:ABC...   # 换 Telegram Bot Token
+mimi> set_wecom_webhook https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxxx
 mimi> set_api_key sk-ant-api03-... # 换 API Key（Anthropic 或 OpenAI）
-mimi> set_model_provider openai    # 切换提供商（anthropic|openai）
+mimi> set_api_url https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions
+mimi> set_model_provider openai_compatible    # 切换提供商（anthropic|openai|openai_compatible）
 mimi> set_model gpt-4o             # 换模型
 mimi> set_proxy 192.168.1.83 7897  # 设置代理
 mimi> clear_proxy                  # 清除代理
@@ -259,7 +261,7 @@ MimiClaw 把所有数据存为纯文本文件，可以直接读取和编辑：
 | `HEARTBEAT.md` | 待办清单 — 机器人定期检查并自主执行 |
 | `cron.json` | 定时任务 — AI 创建的周期性或一次性任务 |
 | `2026-02-05.md` | 每日笔记 — 今天发生了什么 |
-| `tg_12345.jsonl` | 聊天记录 — 你和它的对话 |
+| `chat_12345.jsonl` | 聊天记录 — 你和它的对话 |
 
 ## 工具
 
@@ -289,7 +291,7 @@ MimiClaw 内置 cron 调度器，让 AI 可以自主安排任务。LLM 可以通
 
 ## 其他功能
 
-- **WebSocket 网关** — 端口 18789，局域网内用任意 WebSocket 客户端连接
+- **WebSocket 网关** — 端口 18789，局域网内用任意 WebSocket 客户端连接（`/ui` 提供内置浏览器面板）
 - **OTA 更新** — WiFi 远程刷固件，无需 USB
 - **双核** — 网络 I/O 和 AI 处理分别跑在不同 CPU 核心
 - **HTTP 代理** — CONNECT 隧道，适配受限网络

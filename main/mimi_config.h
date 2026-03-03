@@ -13,14 +13,17 @@
 #ifndef MIMI_SECRET_WIFI_PASS
 #define MIMI_SECRET_WIFI_PASS       ""
 #endif
-#ifndef MIMI_SECRET_TG_TOKEN
-#define MIMI_SECRET_TG_TOKEN        ""
+#ifndef MIMI_SECRET_WECOM_WEBHOOK
+#define MIMI_SECRET_WECOM_WEBHOOK   ""
 #endif
 #ifndef MIMI_SECRET_API_KEY
 #define MIMI_SECRET_API_KEY         ""
 #endif
 #ifndef MIMI_SECRET_MODEL
 #define MIMI_SECRET_MODEL           ""
+#endif
+#ifndef MIMI_SECRET_LLM_API_URL
+#define MIMI_SECRET_LLM_API_URL     ""
 #endif
 #ifndef MIMI_SECRET_MODEL_PROVIDER
 #define MIMI_SECRET_MODEL_PROVIDER  "anthropic"
@@ -43,14 +46,9 @@
 #define MIMI_WIFI_RETRY_BASE_MS      1000
 #define MIMI_WIFI_RETRY_MAX_MS       30000
 
-/* Telegram Bot */
-#define MIMI_TG_POLL_TIMEOUT_S       30
-#define MIMI_TG_MAX_MSG_LEN          4096
-#define MIMI_TG_POLL_STACK           (12 * 1024)
-#define MIMI_TG_POLL_PRIO            5
-#define MIMI_TG_POLL_CORE            0
-#define MIMI_TG_CARD_SHOW_MS         3000
-#define MIMI_TG_CARD_BODY_SCALE      3
+/* WeCom */
+#define MIMI_WECOM_MAX_MSG_LEN       1800
+#define MIMI_WECOM_SEND_TIMEOUT_MS   15000
 
 /* Agent Loop */
 #define MIMI_AGENT_STACK             (24 * 1024)
@@ -63,6 +61,8 @@
 
 /* Timezone (POSIX TZ format) */
 #define MIMI_TIMEZONE                "PST8PDT,M3.2.0,M11.1.0"
+#define MIMI_TIME_SYNC_URL           "https://www.qq.com/"
+#define MIMI_TIME_SYNC_HOST          "www.qq.com"
 
 /* LLM */
 #define MIMI_LLM_DEFAULT_MODEL       "claude-opus-4-5"
@@ -113,7 +113,8 @@
 
 /* NVS Namespaces */
 #define MIMI_NVS_WIFI                "wifi_config"
-#define MIMI_NVS_TG                  "tg_config"
+#define MIMI_NVS_TG                  "tg_config"  /* legacy compatibility */
+#define MIMI_NVS_WECOM               "wecom_cfg"
 #define MIMI_NVS_LLM                 "llm_config"
 #define MIMI_NVS_PROXY               "proxy_config"
 #define MIMI_NVS_SEARCH              "search_config"
@@ -122,8 +123,10 @@
 #define MIMI_NVS_KEY_SSID            "ssid"
 #define MIMI_NVS_KEY_PASS            "password"
 #define MIMI_NVS_KEY_TG_TOKEN        "bot_token"
+#define MIMI_NVS_KEY_WECOM_WEBHOOK   "webhook"
 #define MIMI_NVS_KEY_API_KEY         "api_key"
 #define MIMI_NVS_KEY_MODEL           "model"
+#define MIMI_NVS_KEY_API_URL         "api_url"
 #define MIMI_NVS_KEY_PROVIDER        "provider"
 #define MIMI_NVS_KEY_PROXY_HOST      "host"
 #define MIMI_NVS_KEY_PROXY_PORT      "port"

@@ -32,7 +32,7 @@ esp_err_t context_build_system_prompt(char *buf, size_t size)
     off += snprintf(buf + off, size - off,
         "# MimiClaw\n\n"
         "You are MimiClaw, a personal AI assistant running on an ESP32-S3 device.\n"
-        "You communicate through Telegram and WebSocket.\n\n"
+        "You communicate through WebSocket, and can also deliver outbound notifications to WeCom.\n\n"
         "Be helpful, accurate, and concise.\n\n"
         "## Available Tools\n"
         "You have access to the following tools:\n"
@@ -47,7 +47,7 @@ esp_err_t context_build_system_prompt(char *buf, size_t size)
         "- cron_add: Schedule a recurring or one-shot task. The message will trigger an agent turn when the job fires.\n"
         "- cron_list: List all scheduled cron jobs.\n"
         "- cron_remove: Remove a scheduled cron job by ID.\n\n"
-        "When using cron_add for Telegram delivery, always set channel='telegram' and a valid numeric chat_id.\n\n"
+        "When using cron_add for WeCom delivery, set channel='wecom'.\n\n"
         "Use tools when needed. Provide your final answer as text after using tools.\n\n"
         "## Memory\n"
         "You have persistent memory stored on local flash:\n"

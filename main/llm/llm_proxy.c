@@ -15,12 +15,15 @@ static const char *TAG = "llm";
 
 #define LLM_API_KEY_MAX_LEN 320
 #define LLM_MODEL_MAX_LEN   64
+#define LLM_PROVIDER_MAX_LEN 32
+#define LLM_API_URL_MAX_LEN 256
 #define LLM_DUMP_MAX_BYTES   (16 * 1024)
 #define LLM_DUMP_CHUNK_BYTES 320
 
 static char s_api_key[LLM_API_KEY_MAX_LEN] = {0};
 static char s_model[LLM_MODEL_MAX_LEN] = MIMI_LLM_DEFAULT_MODEL;
-static char s_provider[16] = MIMI_LLM_PROVIDER_DEFAULT;
+static char s_provider[LLM_PROVIDER_MAX_LEN] = MIMI_LLM_PROVIDER_DEFAULT;
+static char s_api_url[LLM_API_URL_MAX_LEN] = {0};
 
 static void llm_log_payload(const char *label, const char *payload)
 {
@@ -182,24 +185,65 @@ static esp_err_t http_event_handler(esp_http_client_event_t *evt)
 
 /* ── Provider helpers ──────────────────────────────────────────── */
 
+static bool provider_is_anthropic(void)
+{
+    return strcmp(s_provider, "anthropic") == 0;
+}
+
 static bool provider_is_openai(void)
 {
-    return strcmp(s_provider, "openai") == 0;
+    /* Treat non-anthropic providers as OpenAI-compatible. */
+    return !provider_is_anthropic();
 }
 
 static const char *llm_api_url(void)
 {
-    return provider_is_openai() ? MIMI_OPENAI_API_URL : MIMI_LLM_API_URL;
+    if (s_api_url[0] != '\0') {
+        return s_api_url;
+    }
+    return provider_is_anthropic() ? MIMI_LLM_API_URL : MIMI_OPENAI_API_URL;
 }
 
-static const char *llm_api_host(void)
+static bool parse_https_url(const char *url,
+                            char *host, size_t host_size,
+                            char *path, size_t path_size)
 {
-    return provider_is_openai() ? "api.openai.com" : "api.anthropic.com";
+    if (!url || strncmp(url, "https://", 8) != 0) {
+        return false;
+    }
+
+    const char *start = url + 8;
+    const char *slash = strchr(start, '/');
+    size_t host_len = slash ? (size_t)(slash - start) : strlen(start);
+    if (host_len == 0 || host_len >= host_size) {
+        return false;
+    }
+
+    memcpy(host, start, host_len);
+    host[host_len] = '\0';
+
+    if (slash && slash[0] != '\0') {
+        safe_copy(path, path_size, slash);
+    } else {
+        safe_copy(path, path_size, "/");
+    }
+    return true;
 }
 
-static const char *llm_api_path(void)
+static void llm_api_host_path(char *host, size_t host_size, char *path, size_t path_size)
 {
-    return provider_is_openai() ? "/v1/chat/completions" : "/v1/messages";
+    const char *url = llm_api_url();
+    if (parse_https_url(url, host, host_size, path, path_size)) {
+        return;
+    }
+
+    if (provider_is_anthropic()) {
+        safe_copy(host, host_size, "api.anthropic.com");
+        safe_copy(path, path_size, "/v1/messages");
+    } else {
+        safe_copy(host, host_size, "api.openai.com");
+        safe_copy(path, path_size, "/v1/chat/completions");
+    }
 }
 
 /* ── Init ─────────────────────────────────────────────────────── */
@@ -216,6 +260,9 @@ esp_err_t llm_proxy_init(void)
     if (MIMI_SECRET_MODEL_PROVIDER[0] != '\0') {
         safe_copy(s_provider, sizeof(s_provider), MIMI_SECRET_MODEL_PROVIDER);
     }
+    if (MIMI_SECRET_LLM_API_URL[0] != '\0') {
+        safe_copy(s_api_url, sizeof(s_api_url), MIMI_SECRET_LLM_API_URL);
+    }
 
     /* NVS overrides take highest priority (set via CLI) */
     nvs_handle_t nvs;
@@ -230,16 +277,22 @@ esp_err_t llm_proxy_init(void)
         if (nvs_get_str(nvs, MIMI_NVS_KEY_MODEL, model_tmp, &len) == ESP_OK && model_tmp[0]) {
             safe_copy(s_model, sizeof(s_model), model_tmp);
         }
-        char provider_tmp[16] = {0};
+        char provider_tmp[LLM_PROVIDER_MAX_LEN] = {0};
         len = sizeof(provider_tmp);
         if (nvs_get_str(nvs, MIMI_NVS_KEY_PROVIDER, provider_tmp, &len) == ESP_OK && provider_tmp[0]) {
             safe_copy(s_provider, sizeof(s_provider), provider_tmp);
+        }
+        char api_url_tmp[LLM_API_URL_MAX_LEN] = {0};
+        len = sizeof(api_url_tmp);
+        if (nvs_get_str(nvs, MIMI_NVS_KEY_API_URL, api_url_tmp, &len) == ESP_OK && api_url_tmp[0]) {
+            safe_copy(s_api_url, sizeof(s_api_url), api_url_tmp);
         }
         nvs_close(nvs);
     }
 
     if (s_api_key[0]) {
-        ESP_LOGI(TAG, "LLM proxy initialized (provider: %s, model: %s)", s_provider, s_model);
+        ESP_LOGI(TAG, "LLM proxy initialized (provider: %s, model: %s, url: %s)",
+                 s_provider, s_model, llm_api_url());
     } else {
         ESP_LOGW(TAG, "No API key. Use CLI: set_api_key <KEY>");
     }
@@ -287,7 +340,11 @@ static esp_err_t llm_http_direct(const char *post_data, resp_buf_t *rb, int *out
 
 static esp_err_t llm_http_via_proxy(const char *post_data, resp_buf_t *rb, int *out_status)
 {
-    proxy_conn_t *conn = proxy_conn_open(llm_api_host(), 443, 30000);
+    char host[128] = {0};
+    char path[192] = {0};
+    llm_api_host_path(host, sizeof(host), path, sizeof(path));
+
+    proxy_conn_t *conn = proxy_conn_open(host, 443, 30000);
     if (!conn) return ESP_ERR_HTTP_CONNECT;
 
     int body_len = strlen(post_data);
@@ -301,7 +358,7 @@ static esp_err_t llm_http_via_proxy(const char *post_data, resp_buf_t *rb, int *
             "Authorization: Bearer %s\r\n"
             "Content-Length: %d\r\n"
             "Connection: close\r\n\r\n",
-            llm_api_path(), llm_api_host(), s_api_key, body_len);
+            path, host, s_api_key, body_len);
     } else {
         hlen = snprintf(header, sizeof(header),
             "POST %s HTTP/1.1\r\n"
@@ -311,7 +368,7 @@ static esp_err_t llm_http_via_proxy(const char *post_data, resp_buf_t *rb, int *
             "anthropic-version: %s\r\n"
             "Content-Length: %d\r\n"
             "Connection: close\r\n\r\n",
-            llm_api_path(), llm_api_host(), s_api_key, MIMI_LLM_API_VERSION, body_len);
+            path, host, s_api_key, MIMI_LLM_API_VERSION, body_len);
     }
 
     if (proxy_conn_write(conn, header, hlen) < 0 ||
@@ -781,6 +838,19 @@ esp_err_t llm_set_api_key(const char *api_key)
 
     safe_copy(s_api_key, sizeof(s_api_key), api_key);
     ESP_LOGI(TAG, "API key saved");
+    return ESP_OK;
+}
+
+esp_err_t llm_set_api_url(const char *api_url)
+{
+    nvs_handle_t nvs;
+    ESP_ERROR_CHECK(nvs_open(MIMI_NVS_LLM, NVS_READWRITE, &nvs));
+    ESP_ERROR_CHECK(nvs_set_str(nvs, MIMI_NVS_KEY_API_URL, api_url));
+    ESP_ERROR_CHECK(nvs_commit(nvs));
+    nvs_close(nvs);
+
+    safe_copy(s_api_url, sizeof(s_api_url), api_url);
+    ESP_LOGI(TAG, "API URL set to: %s", s_api_url);
     return ESP_OK;
 }
 

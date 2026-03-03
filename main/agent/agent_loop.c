@@ -78,8 +78,7 @@ static void append_turn_context_prompt(char *prompt, size_t size, const mimi_msg
         "\n## Current Turn Context\n"
         "- source_channel: %s\n"
         "- source_chat_id: %s\n"
-        "- If using cron_add for Telegram in this turn, set channel='telegram' and chat_id to source_chat_id.\n"
-        "- Never use chat_id 'cron' for Telegram messages.\n",
+        "- If using cron_add for WeCom in this turn, set channel='wecom'.\n",
         msg->channel[0] ? msg->channel : "(unknown)",
         msg->chat_id[0] ? msg->chat_id : "(empty)");
 
@@ -114,12 +113,10 @@ static char *patch_tool_input_with_context(const llm_tool_call_t *call, const mi
         changed = true;
     }
 
-    if (channel && strcmp(channel, MIMI_CHAN_TELEGRAM) == 0 &&
-        strcmp(msg->channel, MIMI_CHAN_TELEGRAM) == 0 && msg->chat_id[0] != '\0') {
+    if (channel && strcmp(channel, MIMI_CHAN_WECOM) == 0) {
         cJSON *chat_item = cJSON_GetObjectItem(root, "chat_id");
-        const char *chat_id = cJSON_IsString(chat_item) ? chat_item->valuestring : NULL;
-        if (!chat_id || chat_id[0] == '\0' || strcmp(chat_id, "cron") == 0) {
-            json_set_string(root, "chat_id", msg->chat_id);
+        if (chat_item) {
+            cJSON_DeleteItemFromObject(root, "chat_id");
             changed = true;
         }
     }
